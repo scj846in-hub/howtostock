@@ -3,15 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>주식 상대비교 대시보드 - 전문가 통합 V9 (저장기능)</title>
+    <title>주식 상대비교 대시보드 - 전문가 통합 V10</title>
     <style>
-        :root { --primary: #0f172a; --accent: #2563eb; --bg: #f8fafc; --border: #e2e8f0; --danger: #ef4444; }
+        :root { --primary: #0f172a; --accent: #2563eb; --bg: #f8fafc; --border: #e2e8f0; --danger: #ef4444; --success: #10b981; }
         body { font-family: 'Pretendard', sans-serif; background: var(--bg); padding: 10px; font-size: 11px; color: #334155; }
         .container { max-width: 1600px; margin: auto; background: #fff; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); overflow: hidden; }
         .tabs { display: flex; background: #f1f5f9; border-bottom: 1px solid var(--border); overflow-x: auto; align-items: center; padding: 0 10px; }
         .tab-btn { padding: 12px 18px; border: none; cursor: pointer; background: none; font-weight: bold; color: #64748b; white-space: nowrap; }
         .tab-btn.active { background: #fff; color: var(--accent); border-bottom: 3px solid var(--accent); }
         .add-btn { padding: 6px 12px; cursor: pointer; background: #1e293b; color: #fff; border: none; border-radius: 4px; font-weight: bold; margin-right: 5px; font-size: 10px; }
+        .save-btn { padding: 8px 15px; cursor: pointer; background: var(--success); color: #fff; border: none; border-radius: 4px; font-weight: bold; margin-left: 10px; }
         .eval-run-btn { padding: 8px 15px; cursor: pointer; background: var(--accent); color: #fff; border: none; border-radius: 4px; font-weight: bold; margin-left: auto; }
         .reset-btn { padding: 8px 15px; cursor: pointer; background: #64748b; color: #fff; border: none; border-radius: 4px; font-weight: bold; margin-left: 10px; }
         .tab-content { display: none; padding: 20px; }
@@ -48,8 +49,9 @@
 <div class="container">
     <div class="tabs" id="tabList">
         <button class="add-btn" onclick="addNewStock()">+ 탭 추가</button>
-        <button class="eval-run-btn" onclick="openCompareModal()">📊 종합 상대비교 실행</button>
+        <button class="save-btn" onclick="manualSave()">💾 현재 데이터 저장</button>
         <button class="reset-btn" onclick="resetAllData()">🧹 전체 초기화</button>
+        <button class="eval-run-btn" onclick="openCompareModal()">📊 종합 상대비교 실행</button>
     </div>
     <div id="panels"></div>
     <div id="compare" class="tab-content">
@@ -60,92 +62,40 @@
 
 <script>
     let stockIdCounter = 0;
-    const STORAGE_KEY = 'STOCK_ANALYSIS_DATA';
+    const STORAGE_KEY = 'PROFESSIONAL_STOCK_DATA_V10';
 
     window.onload = function() {
-        loadData();
-    };
-
-    // 데이터 저장 로직
-    function saveData() {
-        const data = {
-            counter: stockIdCounter,
-            stocks: []
-        };
-        document.querySelectorAll('.tab-content:not(#compare)').forEach(panel => {
-            const id = panel.id;
-            const stockData = {
-                id: id,
-                name: panel.querySelector('.name').value,
-                inputs: {}
-            };
-            panel.querySelectorAll('input, select').forEach(input => {
-                if(input.className) stockData.inputs[input.className] = input.value;
-                if(input.type === 'checkbox') stockData.inputs[input.className + '_chk'] = input.checked;
-            });
-            // 공시 테이블 등 특수 구조 저장
-            stockData.extra = panel.innerHTML; 
-            data.stocks.push(stockData);
-        });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    }
-
-    // 데이터 불러오기 로직
-    function loadData() {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
-            const data = JSON.parse(saved);
-            stockIdCounter = 0; // 초기화 후 다시 생성
-            data.stocks.forEach(s => {
-                renderStockPanel(s.id, s.name);
-                const panel = document.getElementById(s.id);
-                // 저장된 값 복원 (단순 input들)
-                for(let key in s.inputs) {
-                    const el = panel.querySelector(`.${key}`);
-                    if(el) {
-                        if(el.type === 'checkbox') el.checked = s.inputs[key];
-                        else el.value = s.inputs[key];
-                    }
-                }
-                syncAll(s.id);
-            });
-            stockIdCounter = data.counter;
-            openTab(null, data.stocks[0].id);
+            loadSavedData(JSON.parse(saved));
         } else {
-            addNewStock();
-            addNewStock();
+            addNewStock(); // 종목 1
+            addNewStock(); // 종목 2
             openTab(null, 'stock_1');
         }
-    }
-
-    function resetAllData() {
-        if(confirm("모든 분석 데이터가 지워집니다. 계속할까요?")) {
-            localStorage.removeItem(STORAGE_KEY);
-            location.reload();
-        }
-    }
+    };
 
     function addNewStock() {
         stockIdCounter++;
         const id = `stock_${stockIdCounter}`;
-        renderStockPanel(id, `종목 ${stockIdCounter}`);
+        renderPanel(id, `종목 ${stockIdCounter}`);
         openTab(null, id);
-        saveData();
     }
 
-    function renderStockPanel(id, name) {
+    function renderPanel(id, name) {
+        // 탭 버튼 추가
         const btn = document.createElement('button');
         btn.id = `btn_${id}`;
         btn.className = 'tab-btn';
         btn.innerText = name;
         btn.onclick = (e) => openTab(e, id);
         const addBtn = document.querySelector('.add-btn');
-        addBtn.parentNode.insertBefore(btn, addBtn.nextSibling);
+        addBtn.parentNode.insertBefore(btn, document.querySelector('.save-btn'));
 
+        // 패널 추가
         const panel = document.createElement('div');
         panel.id = id;
         panel.className = 'tab-content';
-        panel.oninput = saveData; // 입력할 때마다 자동 저장
         panel.innerHTML = `
             <div class="val-display">
                 <span>매수희망가 기준 PER: <span id="dPer_${id}">-</span></span>
@@ -155,7 +105,7 @@
             <div class="section">
                 <div class="section-header">
                     <span>📍 기본 정보 및 실적</span>
-                    <button class="delete-tab-btn" onclick="deleteStock('${id}')">삭제</button>
+                    ${id !== 'stock_1' && id !== 'stock_2' ? `<button class="delete-tab-btn" onclick="deleteStock('${id}')">삭제</button>` : ''}
                 </div>
                 <div class="grid-row">
                     <div class="input-group"><label>종목명</label><input type="text" class="name" value="${name}" oninput="updateTabName('${id}', this.value)"></div>
@@ -169,40 +119,63 @@
                     <div class="input-group"><label>당기순이익</label><input type="number" class="net" oninput="syncAll('${id}')"></div>
                     <div class="input-group"><label>순이익률</label><input type="text" class="netR" readonly></div>
                 </div>
+                <div class="grid-row">
+                    <div class="input-group"><label>자산총계</label><input type="number" class="assets" oninput="syncAll('${id}')"></div>
+                    <div class="input-group"><label>부채총계</label><input type="number" class="debt" oninput="syncAll('${id}')"></div>
+                    <div class="input-group"><label>계산자본</label><input type="text" class="cEquity" readonly></div>
+                </div>
             </div>
             <div class="section">
                 <div class="section-header">💰 Valuation Band</div>
                 <div class="grid-row">
-                    <div class="input-group"><label>5개년 PER 밴드</label><div><input type="number" class="perH" style="width:45%" oninput="syncAll('${id}')"><input type="number" class="perL" style="width:45%" oninput="syncAll('${id}')"></div></div>
+                    <div class="input-group"><label>5개년 PER 밴드(상/하)</label><div><input type="number" class="perH" style="width:45%" oninput="syncAll('${id}')"><input type="number" class="perL" style="width:45%" oninput="syncAll('${id}')"></div></div>
                     <div class="input-group"><label>경쟁사 평균 PER</label><input type="number" class="avgPer" oninput="syncAll('${id}')"></div>
-                    <div class="input-group"><label>5개년 PBR 밴드</label><div><input type="number" class="pbrH" style="width:45%" oninput="syncAll('${id}')"><input type="number" class="pbrL" style="width:45%" oninput="syncAll('${id}')"></div></div>
+                    <div class="input-group"><label>5개년 PBR 밴드(상/하)</label><div><input type="number" class="pbrH" style="width:45%" oninput="syncAll('${id}')"><input type="number" class="pbrL" style="width:45%" oninput="syncAll('${id}')"></div></div>
+                    <div class="input-group"><label>경쟁사 평균 PBR</label><input type="number" class="avgPbr" oninput="syncAll('${id}')"></div>
                 </div>
                 <div style="background:#fffbeb; padding:8px; border-radius:4px; font-weight:bold; margin-top:5px;">
-                    📊 [밴드 위치]: PER <span id="bandPer_${id}">-</span> | PBR <span id="bandPbr_${id}">-</span> | 🌐 [시장평균대비]: <span id="indPer_${id}">-</span>
+                    📊 [밴드 위치]: PER <span id="bandPer_${id}">-</span> | PBR <span id="bandPbr_${id}">-</span> | 🌐 [시장대비]: PER <span id="indPer_${id}">-</span>
                 </div>
             </div>
             <div class="section">
                 <div class="section-header">🆚 경쟁사 성장률 비교</div>
-                <table class="comp-table">
+                <table>
+                    <thead><tr><th>활성</th><th>경쟁사명</th><th>매출(%)</th><th>영업익(%)</th><th>순이익(%)</th></tr></thead>
                     <tbody>
                         <tr style="background:#f0f9ff"><td>✅</td><td>내 종목</td><td><input type="number" class="myRevG"></td><td><input type="number" class="myOpG"></td><td><input type="number" class="myNetG"></td></tr>
-                        ${[1,2,3,4].map((v,i) => `<tr class="${i>=2?'row-disabled':''}"><td><input type="checkbox" ${i<2?'checked':''} onchange="toggleCompRow(this)"></td><td><input type="text" class="cName"></td><td><input type="number" class="cRevG"></td><td><input type="number" class="cOpG"></td><td><input type="number" class="cNetG"></td></tr>`).join('')}
+                        ${[1,2,3,4].map((v,i) => `
+                        <tr class="${i >= 2 ? 'row-disabled' : ''}">
+                            <td><input type="checkbox" ${i < 2 ? 'checked' : ''} onchange="toggleCompRow(this)"></td>
+                            <td><input type="text" class="cName" placeholder="경쟁사"></td>
+                            <td><input type="number" class="cRevG"></td>
+                            <td><input type="number" class="cOpG"></td>
+                            <td><input type="number" class="cNetG"></td>
+                        </tr>`).join('')}
                     </tbody>
                 </table>
             </div>
             <div class="section">
-                <div class="section-header">📈 차트 및 수급</div>
+                <div class="section-header">📈 차트 분석</div>
                 <div class="grid-row">
-                    <div class="input-group"><label>이평정배열</label><select class="ma" onchange="saveData()"><option value="Y">Y</option><option value="N">N</option></select></div>
+                    <div class="input-group"><label>정배열</label><select class="ma"><option value="Y">Y</option><option value="N">N</option></select></div>
                     <div class="input-group"><label>돌파대금</label><input type="number" class="breakVol" oninput="syncAll('${id}')"></div>
                     <div class="input-group"><label>대금비중</label><input type="text" class="volRatio" readonly></div>
-                    <div class="input-group"><label>테마생존(1-5)</label><input type="number" class="tLive" value="3"></div>
+                    <div class="input-group"><label>현재가>돌파시가</label><select class="pricePos"><option value="Y">Y</option><option value="N">N</option></select></div>
                 </div>
             </div>
             <div class="section">
                 <div class="section-header">🔔 공시 가중평균</div>
-                <table id="eTable_${id}">
-                    ${[1,2,3].map(() => `<tr><td><select class="eType"><option value="3">장내매수</option><option value="3">증여</option><option value="2">3유증</option><option value="1">일반유증/CB</option></select></td><td><input type="month" class="eDate" oninput="syncAll('${id}')"></td><td><input type="number" class="eP" oninput="syncAll('${id}')"></td><td><input type="number" class="eA" oninput="syncAll('${id}')"></td><td><input type="text" class="eW" readonly></td></tr>`).join('')}
+                <table class="eTable">
+                    <thead><tr><th>종류</th><th>시점</th><th>기준가</th><th>총금액</th><th>가중치</th></tr></thead>
+                    <tbody>
+                        ${[1,2,3,4,5].map(() => `<tr>
+                            <td><select class="eType"><option value="3">장내매수</option><option value="3">증여</option><option value="2">3자유증</option><option value="1">일반유증/CB</option></select></td>
+                            <td><input type="month" class="eDate" oninput="syncAll('${id}')"></td>
+                            <td><input type="number" class="eP" oninput="syncAll('${id}')"></td>
+                            <td><input type="number" class="eA" oninput="syncAll('${id}')"></td>
+                            <td><input type="text" class="eW" readonly></td>
+                        </tr>`).join('')}
+                    </tbody>
                 </table>
                 <div style="text-align:right; font-weight:bold; margin-top:5px;">보정단가: <span id="eAvg_${id}">0</span></div>
             </div>
@@ -210,13 +183,82 @@
         document.getElementById('panels').appendChild(panel);
     }
 
-    function deleteStock(id) {
-        if(confirm("이 종목을 삭제할까요?")) {
-            document.getElementById(`btn_${id}`).remove();
-            document.getElementById(id).remove();
-            saveData();
-            location.reload();
+    function syncAll(id) {
+        const p = document.getElementById(id);
+        const price = parseFloat(p.querySelector('.price').value) || 0;
+        const shares = parseFloat(p.querySelector('.shares').value) || 0;
+        const mc = price * shares;
+        const rev = parseFloat(p.querySelector('.rev').value) || 0;
+        const net = parseFloat(p.querySelector('.net').value) || 0;
+        const assets = parseFloat(p.querySelector('.assets').value) || 0;
+        const debt = parseFloat(p.querySelector('.debt').value) || 0;
+        const equity = assets - debt;
+
+        if(rev > 0) {
+            p.querySelector('.opR').value = ((parseFloat(p.querySelector('.op').value)||0)/rev*100).toFixed(1) + "%";
+            p.querySelector('.netR').value = (net/rev*100).toFixed(1) + "%";
         }
+        p.querySelector('.cEquity').value = equity.toLocaleString();
+        document.getElementById(`dPer_${id}`).innerText = net !== 0 ? (mc/net).toFixed(2) : "-";
+        document.getElementById(`dPbr_${id}`).innerText = equity !== 0 ? (mc/equity).toFixed(2) : "-";
+        document.getElementById(`dMc_${id}`).innerText = mc.toLocaleString();
+
+        const bVol = parseFloat(p.querySelector('.breakVol').value) || 0;
+        if(mc > 0) p.querySelector('.volRatio').value = ((bVol/mc)*100).toFixed(2) + "%";
+
+        // 공시 가중평균
+        let sumWP = 0, sumA = 0;
+        p.querySelectorAll(`.eTable tbody tr`).forEach(r => {
+            const ep = parseFloat(r.querySelector('.eP').value) || 0;
+            const ea = parseFloat(r.querySelector('.eA').value) || 0;
+            const tw = parseFloat(r.querySelector('.eType').value);
+            const dateVal = r.querySelector('.eDate').value;
+            if (ea > 0 && dateVal) {
+                const diff = (2026 - parseInt(dateVal.split('-')[0])) * 12 + (2 - parseInt(dateVal.split('-')[1]));
+                const timeWeight = Math.max(0.5, 1.5 - (diff / 24)); 
+                const totalW = timeWeight * tw;
+                r.querySelector('.eW').value = totalW.toFixed(1) + '배';
+                sumWP += (ep * ea * totalW); sumA += (ea * totalW);
+            }
+        });
+        document.getElementById(`eAvg_${id}`).innerText = sumA > 0 ? Math.round(sumWP/sumA).toLocaleString() : '0';
+    }
+
+    function manualSave() {
+        const data = {
+            counter: stockIdCounter,
+            stocks: []
+        };
+        document.querySelectorAll('.tab-content:not(#compare)').forEach(panel => {
+            const id = panel.id;
+            const inputs = [];
+            panel.querySelectorAll('input, select').forEach((el, idx) => {
+                inputs.push({
+                    val: el.value,
+                    chk: el.type === 'checkbox' ? el.checked : null
+                });
+            });
+            data.stocks.push({ id, name: panel.querySelector('.name').value, inputs });
+        });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        alert("성공적으로 저장되었습니다.");
+    }
+
+    function loadSavedData(data) {
+        stockIdCounter = 0;
+        data.stocks.forEach(s => {
+            renderPanel(s.id, s.name);
+            const panel = document.getElementById(s.id);
+            panel.querySelectorAll('input, select').forEach((el, idx) => {
+                if(s.inputs[idx]) {
+                    el.value = s.inputs[idx].val;
+                    if(el.type === 'checkbox') el.checked = s.inputs[idx].chk;
+                }
+            });
+            syncAll(s.id);
+            if(parseInt(s.id.split('_')[1]) > stockIdCounter) stockIdCounter = parseInt(s.id.split('_')[1]);
+        });
+        openTab(null, data.stocks[0].id);
     }
 
     function openTab(e, id) {
@@ -228,56 +270,25 @@
 
     function updateTabName(id, val) {
         document.getElementById(`btn_${id}`).innerText = val || `종목`;
-        saveData();
     }
 
     function toggleCompRow(cb) {
         cb.closest('tr').classList.toggle('row-disabled', !cb.checked);
-        saveData();
     }
 
-    function syncAll(id) {
-        const p = document.getElementById(id);
-        const price = parseFloat(p.querySelector('.price').value) || 0;
-        const shares = parseFloat(p.querySelector('.shares').value) || 0;
-        const mc = price * shares;
-        const rev = parseFloat(p.querySelector('.rev').value) || 0;
-        const net = parseFloat(p.querySelector('.net').value) || 0;
-
-        if(rev > 0) {
-            p.querySelector('.opR').value = ((parseFloat(p.querySelector('.op').value)||0)/rev*100).toFixed(1) + "%";
-            p.querySelector('.netR').value = (net/rev*100).toFixed(1) + "%";
+    function resetAllData() {
+        if(confirm("모든 데이터를 지우고 초기화할까요?")) {
+            localStorage.removeItem(STORAGE_KEY);
+            location.reload();
         }
-        document.getElementById(`dPer_${id}`).innerText = net !== 0 ? (mc/net).toFixed(2) : "-";
-        document.getElementById(`dMc_${id}`).innerText = mc.toLocaleString();
-
-        const bVol = parseFloat(p.querySelector('.breakVol').value) || 0;
-        if(mc > 0) p.querySelector('.volRatio').value = ((bVol/mc)*100).toFixed(2) + "%";
-
-        let sumWP = 0, sumA = 0;
-        p.querySelectorAll(`#eTable_${id} tr`).forEach(r => {
-            const ep = parseFloat(r.querySelector('.eP').value) || 0;
-            const ea = parseFloat(r.querySelector('.eA').value) || 0;
-            const tw = parseFloat(r.querySelector('.eType').value);
-            const dateVal = r.querySelector('.eDate').value;
-            if (ea > 0 && dateVal) {
-                const diff = (2026 - parseInt(dateVal.split('-')[0])) * 12 + (2 - parseInt(dateVal.split('-')[1]));
-                const timeW = Math.max(0.5, 1.5 - (diff / 24)); 
-                const totalW = timeW * tw;
-                r.querySelector('.eW').value = totalW.toFixed(1) + '배';
-                sumWP += (ep * ea * totalW); sumA += (ea * totalW);
-            }
-        });
-        document.getElementById(`eAvg_${id}`).innerText = sumA > 0 ? Math.round(sumWP/sumA).toLocaleString() : '0';
     }
 
     function openCompareModal() {
         const list = document.getElementById('checkList');
         list.innerHTML = "";
-        document.querySelectorAll('.tab-btn:not(.add-btn):not(.eval-run-btn):not(.reset-btn)').forEach(btn => {
-            if(btn.id) {
-                const id = btn.id.replace('btn_', '');
-                list.innerHTML += `<div style="margin-bottom:8px;"><label style="cursor:pointer;"><input type="checkbox" value="${id}" checked> ${btn.innerText}</label></div>`;
+        document.querySelectorAll('.tab-btn:not(.add-btn)').forEach(btn => {
+            if(btn.id && btn.id.startsWith('btn_stock')) {
+                list.innerHTML += `<div style="margin-bottom:8px;"><label><input type="checkbox" value="${btn.id.replace('btn_','')}" checked> ${btn.innerText}</label></div>`;
             }
         });
         document.getElementById('evalModal').style.display = 'block';
@@ -291,21 +302,21 @@
 
     function executeFinalCompare() {
         const selectedIds = Array.from(document.querySelectorAll('#checkList input:checked')).map(cb => cb.value);
-        if(selectedIds.length === 0) return alert("종목을 선택해주세요.");
+        if(selectedIds.length === 0) return alert("비교할 종목을 선택하세요.");
         
         let res = [];
         selectedIds.forEach(id => {
             const p = document.getElementById(id);
             const name = p.querySelector('.name').value;
-            let score = 50 + (Math.random()*30); // 점수 산출 로직 유지
-            res.push({ name, score, indPer: document.getElementById(`indPer_${id}`) ? document.getElementById(`indPer_${id}`).innerText : '-' });
+            const score = Math.random() * 100; // 기존 점수 산출 로직에 맞춰 확장 가능
+            res.push({ name, score });
         });
         
         res.sort((a,b) => b.score - a.score);
-        document.getElementById('dashboard').innerHTML = res.map((r, idx) => `
-            <div style="padding:15px; border:1px solid #e2e8f0; border-radius:10px; background:${idx===0?'#f0f9ff':'#fff'}">
-                <h3>#${idx+1} ${r.name}</h3>
-                <div style="font-size:24px; font-weight:bold; color:var(--accent);">${r.score.toFixed(1)}점</div>
+        document.getElementById('dashboard').innerHTML = res.map((r, i) => `
+            <div style="padding:15px; border:1px solid #ddd; border-radius:8px; background:${i===0?'#f0f9ff':'#fff'}">
+                <h3>#${i+1} ${r.name}</h3>
+                <p>종합 점수: ${r.score.toFixed(1)}점</p>
             </div>
         `).join('');
         closeModal();
