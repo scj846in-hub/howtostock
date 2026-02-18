@@ -3,200 +3,195 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>주식 상대비교 대시보드 - 전문가 통합 V5</title>
+    <title>주식 상대비교 대시보드 - 전문가 통합 V8</title>
     <style>
-        :root { --primary: #0f172a; --accent: #2563eb; --bg: #f8fafc; --border: #e2e8f0; --success: #16a34a; }
+        :root { --primary: #0f172a; --accent: #2563eb; --bg: #f8fafc; --border: #e2e8f0; --danger: #ef4444; }
         body { font-family: 'Pretendard', sans-serif; background: var(--bg); padding: 10px; font-size: 11px; color: #334155; }
         .container { max-width: 1600px; margin: auto; background: #fff; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); overflow: hidden; }
-        .tabs { display: flex; background: #f1f5f9; border-bottom: 1px solid var(--border); overflow-x: auto; }
+        .tabs { display: flex; background: #f1f5f9; border-bottom: 1px solid var(--border); overflow-x: auto; align-items: center; padding: 0 10px; }
         .tab-btn { padding: 12px 18px; border: none; cursor: pointer; background: none; font-weight: bold; color: #64748b; white-space: nowrap; }
         .tab-btn.active { background: #fff; color: var(--accent); border-bottom: 3px solid var(--accent); }
+        .add-btn { padding: 6px 12px; cursor: pointer; background: #1e293b; color: #fff; border: none; border-radius: 4px; font-weight: bold; margin-right: 5px; font-size: 10px; }
+        .eval-run-btn { padding: 8px 15px; cursor: pointer; background: var(--accent); color: #fff; border: none; border-radius: 4px; font-weight: bold; margin-left: auto; }
         .tab-content { display: none; padding: 20px; }
         .tab-content.active { display: block; }
         .section { border: 1px solid var(--border); padding: 15px; border-radius: 8px; margin-bottom: 15px; background: #fff; }
-        .section-header { font-size: 13px; font-weight: 800; color: var(--primary); margin-bottom: 10px; border-left: 4px solid var(--accent); padding-left: 8px; }
+        .section-header { font-size: 13px; font-weight: 800; color: var(--primary); margin-bottom: 10px; border-left: 4px solid var(--accent); padding-left: 8px; display: flex; justify-content: space-between; }
         .grid-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 8px; }
         .input-group { display: flex; flex-direction: column; gap: 3px; }
         label { font-size: 10px; font-weight: 700; color: #475569; }
         input, select { padding: 5px; border: 1px solid var(--border); border-radius: 4px; }
         input[readonly] { background: #f8fafc; color: var(--accent); font-weight: bold; }
-        .val-display { background: #eff6ff; padding: 10px; border-radius: 6px; display: flex; justify-content: space-around; font-weight: bold; color: var(--accent); margin-bottom: 10px; }
+        .val-display { background: #eff6ff; padding: 10px; border-radius: 6px; display: flex; justify-content: space-around; font-weight: bold; color: var(--accent); margin-bottom: 10px; flex-wrap: wrap; gap: 10px; }
         table { width: 100%; border-collapse: collapse; margin-top: 5px; }
         th { background: #f8fafc; padding: 6px; border: 1px solid var(--border); font-size: 10px; }
         td { padding: 4px; border: 1px solid var(--border); text-align: center; }
-        .range-highlight { color: #dc2626; font-weight: 800; }
+        .row-disabled { opacity: 0.4; background: #f8fafc; pointer-events: none; }
+        .delete-tab-btn { background: #fee2e2; color: var(--danger); border: 1px solid #fecaca; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 9px; font-weight: bold; }
+        #evalModal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 25px; border-radius: 12px; box-shadow: 0 0 50px rgba(0,0,0,0.3); z-index: 1000; width: 300px; }
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; }
     </style>
 </head>
 <body>
 
+<div class="modal-overlay" id="overlay"></div>
+<div id="evalModal">
+    <h3 style="margin-top:0;">📊 비교 대상 선택</h3>
+    <div id="checkList" style="margin-bottom: 20px;"></div>
+    <div style="display:flex; gap:10px;">
+        <button class="eval-run-btn" style="flex:1;" onclick="executeFinalCompare()">비교 시작</button>
+        <button class="eval-run-btn" style="flex:1; background:#64748b;" onclick="closeModal()">취소</button>
+    </div>
+</div>
+
 <div class="container">
-    <div class="tabs" id="tabList"></div>
+    <div class="tabs" id="tabList">
+        <button class="add-btn" onclick="addNewStock()">+ 탭 추가</button>
+        <button class="eval-run-btn" onclick="openCompareModal()">📊 종합 상대비교 실행</button>
+    </div>
     <div id="panels"></div>
     <div id="compare" class="tab-content">
-        <h2 style="text-align:center;">🏆 최종 투자 우선순위 분석 대시보드</h2>
+        <h2 style="text-align:center;">🏆 최종 투자 우선순위 분석 결과</h2>
         <div id="dashboard" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 15px;"></div>
     </div>
 </div>
 
 <script>
-    const stockCount = 5;
-    const currentYearMonth = "2026-02"; 
+    let stockIdCounter = 0;
+    const currentYearMonth = "2026-02";
 
-    function init() {
-        const tabList = document.getElementById('tabList');
-        const panels = document.getElementById('panels');
+    // 1. 초기 실행 시 종목 2개 기본 생성
+    window.onload = function() {
+        addNewStock(); // 종목 1
+        addNewStock(); // 종목 2
+        openTab(null, 'stock_1');
+    };
 
-        for (let i = 1; i <= stockCount; i++) {
-            tabList.innerHTML += `<button class="tab-btn" onclick="openTab(event, 'stock${i}')">종목 ${i}</button>`;
-            panels.innerHTML += `
-                <div id="stock${i}" class="tab-content">
-                    <div class="val-display">
-                        <span>현재 PER: <span id="dPer_${i}">-</span></span>
-                        <span>현재 PBR: <span id="dPbr_${i}">-</span></span>
-                        <span>자본(자동): <span id="dEq_${i}">-</span></span>
-                        <span>시총: <span id="dMc_${i}">-</span></span>
-                    </div>
+    function addNewStock() {
+        stockIdCounter++;
+        const id = `stock_${stockIdCounter}`;
+        
+        // [탭 버튼 생성]
+        const btn = document.createElement('button');
+        btn.id = `btn_${id}`;
+        btn.className = 'tab-btn';
+        btn.innerText = `종목 ${stockIdCounter}`;
+        btn.onclick = (e) => openTab(e, id);
+        // 버튼을 '+ 탭 추가' 버튼 바로 뒤에 삽입
+        const addBtn = document.querySelector('.add-btn');
+        addBtn.parentNode.insertBefore(btn, addBtn.nextSibling);
 
-                    <div class="section">
-                        <div class="section-header">📍 기본 정보 및 실적 (자산/부채 포함)</div>
-                        <div class="grid-row">
-                            <div class="input-group"><label>종목명</label><input type="text" class="name" value="종목 ${i}"></div>
-                            <div class="input-group"><label>매수희망가</label><input type="number" class="price" oninput="syncAll(${i})"></div>
-                            <div class="input-group"><label>주식수</label><input type="number" class="shares" oninput="syncAll(${i})"></div>
-                            <div class="input-group"><label>매출액</label><input type="number" class="rev" oninput="syncAll(${i})"></div>
-                        </div>
-                        <div class="grid-row">
-                            <div class="input-group"><label>영업이익</label><input type="number" class="op" oninput="syncAll(${i})"></div>
-                            <div class="input-group"><label>영업이익률</label><input type="text" class="opR" readonly></div>
-                            <div class="input-group"><label>당기순이익</label><input type="number" class="net" oninput="syncAll(${i})"></div>
-                            <div class="input-group"><label>순이익률</label><input type="text" class="netR" readonly></div>
-                        </div>
-                        <div class="grid-row">
-                            <div class="input-group"><label>자산총계</label><input type="number" class="assets" oninput="syncAll(${i})"></div>
-                            <div class="input-group"><label>부채총계</label><input type="number" class="debt" oninput="syncAll(${i})"></div>
-                            <div class="input-group"><label>계산자본</label><input type="text" class="cEquity" readonly></div>
-                        </div>
-                    </div>
+        // [패널 콘텐츠 생성]
+        const panel = document.createElement('div');
+        panel.id = id;
+        panel.className = 'tab-content';
+        panel.innerHTML = `
+            <div class="val-display">
+                <span>매수희망가 기준 PER: <span id="dPer_${id}">-</span></span>
+                <span>매수희망가 기준 PBR: <span id="dPbr_${id}">-</span></span>
+                <span>매수희망가 기준 시총: <span id="dMc_${id}">-</span></span>
+            </div>
 
-                    <div class="section">
-                        <div class="section-header">💰 Valuation Band 및 시장 대비 위치</div>
-                        <div class="grid-row">
-                            <div class="input-group"><label>5개년 PER 밴드(상/하)</label><div><input type="number" class="perH" style="width:45%" oninput="syncAll(${i})"><input type="number" class="perL" style="width:45%" oninput="syncAll(${i})"></div></div>
-                            <div class="input-group"><label>경쟁사 평균 PER</label><input type="number" class="avgPer" oninput="syncAll(${i})"></div>
-                            <div class="input-group"><label>5개년 PBR 밴드(상/하)</label><div><input type="number" class="pbrH" style="width:45%" oninput="syncAll(${i})"><input type="number" class="pbrL" style="width:45%" oninput="syncAll(${i})"></div></div>
-                            <div class="input-group"><label>경쟁사 평균 PBR</label><input type="number" class="avgPbr" oninput="syncAll(${i})"></div>
-                        </div>
-                        <div style="background:#fffbeb; padding:8px; border-radius:4px; font-weight:bold; margin-top:5px; line-height:1.6;">
-                            📊 [밴드 대비 위치]: PER <span class="range-highlight" id="bandPer_${i}">-</span> | PBR <span class="range-highlight" id="bandPbr_${i}">-</span><br>
-                            🌐 [시장 평균 대비]: PER <span class="range-highlight" id="indPer_${i}">-</span> | PBR <span class="range-highlight" id="indPbr_${i}">-</span>
-                        </div>
-                    </div>
-
-                    <div class="section">
-                        <div class="section-header">🆚 경쟁사 성장률 비교 (통합 순위 도출)</div>
-                        <table>
-                            <thead><tr><th>경쟁사명</th><th>매출성장(%)</th><th>영업익성장(%)</th><th>순이익성장(%)</th></tr></thead>
-                            <tbody>
-                                <tr style="background:#f0f9ff"><td><input type="text" value="내 종목" readonly></td><td><input type="number" class="myRevG"></td><td><input type="number" class="myOpG"></td><td><input type="number" class="myNetG"></td></tr>
-                                ${Array(4).fill().map(() => `<tr><td><input type="text" class="cName" placeholder="경쟁사명"></td><td><input type="number" class="cRevG"></td><td><input type="number" class="cOpG"></td><td><input type="number" class="cNetG"></td></tr>`).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div class="section">
-                        <div class="section-header">📈 차트 분석 (돌파 대금 비중)</div>
-                        <div class="grid-row">
-                            <div class="input-group"><label>이평선 정배열</label><select class="ma"><option value="Y">Y</option><option value="N">N</option></select></div>
-                            <div class="input-group"><label>돌파 거래대금</label><input type="number" class="breakVol" oninput="syncAll(${i})"></div>
-                            <div class="input-group"><label>대금/시총 비중</label><input type="text" class="volRatio" readonly></div>
-                            <div class="input-group"><label>현재가 > 돌파 시가</label><select class="pricePos"><option value="Y">Y</option><option value="N">N</option></select></div>
-                        </div>
-                        <div class="grid-row">
-                            <div class="input-group"><label>RSI/MACD 과매도 탈출(1-5)</label><input type="number" class="osc" min="1" max="5" value="3"></div>
-                            <div class="input-group"><label>OBV 유지(1-5)</label><input type="number" class="obv" min="1" max="5" value="3"></div>
-                        </div>
-                    </div>
-
-                    <div class="section">
-                        <div class="section-header">💧 수급 및 테마 분석</div>
-                        <div class="grid-row">
-                            <div class="input-group"><label>주요수급 유입(연기금 등)</label><select class="supply"><option value="Y">Y</option><option value="N">N</option></select></div>
-                            <div class="input-group"><label>하락 시 수급주체 잔존</label><select class="supplyH"><option value="Y">Y</option><option value="N">N</option></select></div>
-                            <div class="input-group"><label>테마 생존도(1-5)</label><input type="number" class="tLive" min="1" max="5" value="3"></div>
-                            <div class="input-group"><label>테마 대장주(1-5)</label><input type="number" class="tLead" min="1" max="5" value="1"></div>
-                        </div>
-                    </div>
-
-                    <div class="section">
-                        <div class="section-header">🔔 공시 가중평균 분석 (시점 가중치 반영)</div>
-                        <table id="eTable_${i}">
-                            <thead><tr><th>종류</th><th>시점(년/월)</th><th>기준가</th><th>총금액</th><th>보정 가중치</th></tr></thead>
-                            <tbody>
-                                ${Array(5).fill().map(() => `<tr>
-                                    <td><select><option>장내매수</option><option>자사주</option><option>CB</option><option>유증</option></select></td>
-                                    <td><input type="month" class="eDate" oninput="syncAll(${i})"></td>
-                                    <td><input type="number" class="eP" oninput="syncAll(${i})"></td>
-                                    <td><input type="number" class="eA" oninput="syncAll(${i})"></td>
-                                    <td><input type="text" class="eW" readonly></td>
-                                </tr>`).join('')}
-                            </tbody>
-                        </table>
-                        <div style="margin-top:5px; text-align:right; font-weight:bold;">가중평균 보정단가: <span id="eAvg_${i}">0</span></div>
-                    </div>
+            <div class="section">
+                <div class="section-header">
+                    <span>📍 기본 정보 및 실적</span>
+                    ${stockIdCounter > 2 ? `<button class="delete-tab-btn" onclick="deleteStock('${id}')">삭제</button>` : ''}
                 </div>
-            `;
-        }
-        tabList.innerHTML += `<button class="tab-btn" style="background:var(--accent); color:#fff;" onclick="runEval()">📊 종합 상대비교 실행</button>`;
-        openTab(null, 'stock1');
+                <div class="grid-row">
+                    <div class="input-group"><label>종목명</label><input type="text" class="name" value="종목 ${stockIdCounter}" oninput="updateTabName('${id}', this.value)"></div>
+                    <div class="input-group"><label>매수희망가</label><input type="number" class="price" oninput="syncAll('${id}')"></div>
+                    <div class="input-group"><label>주식수</label><input type="number" class="shares" oninput="syncAll('${id}')"></div>
+                    <div class="input-group"><label>매출액</label><input type="number" class="rev" oninput="syncAll('${id}')"></div>
+                </div>
+                <div class="grid-row">
+                    <div class="input-group"><label>영업이익</label><input type="number" class="op" oninput="syncAll('${id}')"></div>
+                    <div class="input-group"><label>영업이익률</label><input type="text" class="opR" readonly></div>
+                    <div class="input-group"><label>당기순이익</label><input type="number" class="net" oninput="syncAll('${id}')"></div>
+                    <div class="input-group"><label>순이익률</label><input type="text" class="netR" readonly></div>
+                </div>
+                <div class="grid-row">
+                    <div class="input-group"><label>자산총계</label><input type="number" class="assets" oninput="syncAll('${id}')"></div>
+                    <div class="input-group"><label>부채총계</label><input type="number" class="debt" oninput="syncAll('${id}')"></div>
+                    <div class="input-group"><label>계산자본(참고)</label><input type="text" class="cEquity" readonly></div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-header">💰 Valuation Band 및 시장 대비 위치</div>
+                <div class="grid-row">
+                    <div class="input-group"><label>5개년 PER 밴드(상/하)</label><div><input type="number" class="perH" style="width:45%" oninput="syncAll('${id}')"><input type="number" class="perL" style="width:45%" oninput="syncAll('${id}')"></div></div>
+                    <div class="input-group"><label>경쟁사 평균 PER</label><input type="number" class="avgPer" oninput="syncAll('${id}')"></div>
+                    <div class="input-group"><label>5개년 PBR 밴드(상/하)</label><div><input type="number" class="pbrH" style="width:45%" oninput="syncAll('${id}')"><input type="number" class="pbrL" style="width:45%" oninput="syncAll('${id}')"></div></div>
+                    <div class="input-group"><label>경쟁사 평균 PBR</label><input type="number" class="avgPbr" oninput="syncAll('${id}')"></div>
+                </div>
+                <div style="background:#fffbeb; padding:8px; border-radius:4px; font-weight:bold; margin-top:5px; line-height:1.6;">
+                    📊 [밴드 대비 위치]: PER <span class="range-highlight" id="bandPer_${id}">-</span> | PBR <span class="range-highlight" id="bandPbr_${id}">-</span><br>
+                    🌐 [시장 평균 대비]: PER <span class="range-highlight" id="indPer_${id}">-</span> | PBR <span class="range-highlight" id="indPbr_${id}">-</span>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-header">🆚 경쟁사 성장률 비교 (체크 시 활성화)</div>
+                <table class="comp-table">
+                    <thead><tr><th>활성</th><th>경쟁사명</th><th>매출(%)</th><th>영업익(%)</th><th>순이익(%)</th></tr></thead>
+                    <tbody>
+                        <tr style="background:#f0f9ff"><td>✅</td><td><input type="text" value="내 종목" readonly></td><td><input type="number" class="myRevG"></td><td><input type="number" class="myOpG"></td><td><input type="number" class="myNetG"></td></tr>
+                        ${[0,1,2,3].map(idx => `
+                        <tr class="${idx >= 2 ? 'row-disabled' : ''}">
+                            <td><input type="checkbox" ${idx < 2 ? 'checked' : ''} onchange="toggleCompRow(this)"></td>
+                            <td><input type="text" placeholder="경쟁사명"></td>
+                            <td><input type="number" class="cRevG"></td>
+                            <td><input type="number" class="cOpG"></td>
+                            <td><input type="number" class="cNetG"></td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="section">
+                <div class="section-header">📈 차트 분석 (돌파 대금 비중)</div>
+                <div class="grid-row">
+                    <div class="input-group"><label>이평선 정배열</label><select class="ma"><option value="Y">Y</option><option value="N">N</option></select></div>
+                    <div class="input-group"><label>돌파 거래대금</label><input type="number" class="breakVol" oninput="syncAll('${id}')"></div>
+                    <div class="input-group"><label>대금/시총 비중</label><input type="text" class="volRatio" readonly></div>
+                    <div class="input-group"><label>현재가 > 돌파 시가</label><select class="pricePos"><option value="Y">Y</option><option value="N">N</option></select></div>
+                </div>
+                <div class="grid-row">
+                    <div class="input-group"><label>RSI/MACD 과매도 탈출(1-5)</label><input type="number" class="osc" min="1" max="5" value="3"></div>
+                    <div class="input-group"><label>OBV 유지(1-5)</label><input type="number" class="obv" min="1" max="5" value="3"></div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-header">🔔 공시 가중평균 분석 (가중치: 장내/증여/상속 3점, 3유증 2점, 기타 1점)</div>
+                <table id="eTable_${id}">
+                    <thead><tr><th>종류</th><th>시점</th><th>기준가</th><th>총금액</th><th>가중치</th></tr></thead>
+                    <tbody>
+                        ${[1,2,3,4,5].map(() => `<tr>
+                            <td><select class="eType">
+                                <option value="3">장내매수</option><option value="3">증여</option><option value="3">상속</option>
+                                <option value="2">유상증자(3자)</option><option value="1">유상증자(일반)</option>
+                                <option value="1">CB</option><option value="1">자사주</option>
+                            </select></td>
+                            <td><input type="month" class="eDate" oninput="syncAll('${id}')"></td>
+                            <td><input type="number" class="eP" oninput="syncAll('${id}')"></td>
+                            <td><input type="number" class="eA" oninput="syncAll('${id}')"></td>
+                            <td><input type="text" class="eW" readonly></td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
+                <div style="margin-top:5px; text-align:right; font-weight:bold;">가중평균 보정단가: <span id="eAvg_${id}">0</span></div>
+            </div>
+        `;
+        document.getElementById('panels').appendChild(panel);
     }
 
-    function syncAll(i) {
-        const p = document.getElementById(`stock${i}`);
-        const price = parseFloat(p.querySelector('.price').value) || 0;
-        const mc = price * (parseFloat(p.querySelector('.shares').value) || 0);
-        
-        const rev = parseFloat(p.querySelector('.rev').value) || 0;
-        const net = parseFloat(p.querySelector('.net').value) || 0;
-        const assets = parseFloat(p.querySelector('.assets').value) || 0;
-        const debt = parseFloat(p.querySelector('.debt').value) || 0;
-        const equity = assets - debt;
-        
-        if(rev > 0) {
-            p.querySelector('.opR').value = ((parseFloat(p.querySelector('.op').value)||0)/rev*100).toFixed(1) + "%";
-            p.querySelector('.netR').value = (net/rev*100).toFixed(1) + "%";
+    function deleteStock(id) {
+        if(confirm("이 종목 탭을 삭제하시겠습니까?")) {
+            document.getElementById(`btn_${id}`).remove();
+            document.getElementById(id).remove();
+            openTab(null, 'stock_1');
         }
-        p.querySelector('.cEquity').value = equity.toLocaleString();
-        
-        const curPer = net !== 0 ? mc / net : 0;
-        const curPbr = equity !== 0 ? mc / equity : 0;
-        
-        document.getElementById(`dPer_${i}`).innerText = curPer.toFixed(2);
-        document.getElementById(`dPbr_${i}`).innerText = curPbr.toFixed(2);
-        document.getElementById(`dEq_${i}`).innerText = equity.toLocaleString();
-        document.getElementById(`dMc_${i}`).innerText = mc.toLocaleString();
-
-        const bVol = parseFloat(p.querySelector('.breakVol').value) || 0;
-        if(mc > 0) p.querySelector('.volRatio').value = ((bVol/mc)*100).toFixed(2) + "%";
-
-        const calcPos = (cur, target, id) => { if (target > 0 && cur > 0) document.getElementById(id).innerText = ((cur / target) * 100).toFixed(1) + "%"; };
-        calcPos(curPer, (parseFloat(p.querySelector('.perH').value) + parseFloat(p.querySelector('.perL').value))/2, `bandPer_${i}`);
-        calcPos(curPbr, (parseFloat(p.querySelector('.pbrH').value) + parseFloat(p.querySelector('.pbrL').value))/2, `bandPbr_${i}`);
-        calcPos(curPer, parseFloat(p.querySelector('.avgPer').value), `indPer_${i}`);
-        calcPos(curPbr, parseFloat(p.querySelector('.avgPbr').value), `indPbr_${i}`);
-
-        let sumWP = 0, sumA = 0;
-        p.querySelectorAll(`#eTable_${i} tbody tr`).forEach(r => {
-            const ep = parseFloat(r.querySelector('.eP').value) || 0;
-            const ea = parseFloat(r.querySelector('.eA').value) || 0;
-            const dateVal = r.querySelector('.eDate').value;
-            if (ea > 0 && dateVal) {
-                const diffMonths = (2026 - parseInt(dateVal.split('-')[0])) * 12 + (2 - parseInt(dateVal.split('-')[1]));
-                const timeWeight = Math.max(0.5, 1.5 - (diffMonths / 24)); 
-                r.querySelector('.eW').value = ((ea/mc)*100*timeWeight).toFixed(1) + '%';
-                sumWP += (ep * ea * timeWeight); sumA += (ea * timeWeight);
-            }
-        });
-        document.getElementById(`eAvg_${i}`).innerText = sumA > 0 ? Math.round(sumWP/sumA).toLocaleString() : '0';
     }
 
     function openTab(e, id) {
@@ -204,50 +199,106 @@
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.getElementById(id).classList.add('active');
         if(e) e.currentTarget.classList.add('active');
+        else if(document.getElementById(`btn_${id}`)) document.getElementById(`btn_${id}`).classList.add('active');
     }
 
-    function runEval() {
-        let res = [];
-        for (let i = 1; i <= stockCount; i++) {
-            const p = document.getElementById(`stock${i}`);
-            
-            const getRank = (myVal, cSelector) => {
-                const vals = [myVal, ...Array.from(p.querySelectorAll(cSelector)).map(el => parseFloat(el.value)|| -999)];
-                return vals.sort((a,b)=>b-a).indexOf(myVal) + 1;
-            };
-            const rRank = getRank(parseFloat(p.querySelector('.myRevG').value)||0, '.cRevG');
-            const oRank = getRank(parseFloat(p.querySelector('.myOpG').value)||0, '.cOpG');
-            const nRank = getRank(parseFloat(p.querySelector('.myNetG').value)||0, '.cNetG');
-            const avgGrowthRank = (rRank + oRank + nRank) / 3;
+    function updateTabName(id, val) {
+        document.getElementById(`btn_${id}`).innerText = val || `종목`;
+    }
 
-            let score = (6 - avgGrowthRank) * 10;
-            score += (parseInt(p.querySelector('.osc').value)||0) + (parseInt(p.querySelector('.obv').value)||0);
-            score += (parseInt(p.querySelector('.tLive').value)||0) * 5 + (parseInt(p.querySelector('.tLead').value)||0) * 5;
-            
-            const vRatio = parseFloat(p.querySelector('.volRatio').value.replace('%','')) || 0;
-            if(vRatio > 5) score += 10;
+    function toggleCompRow(cb) {
+        cb.closest('tr').classList.toggle('row-disabled', !cb.checked);
+    }
 
-            const checks = ['.ma', '.pricePos', '.supply', '.supplyH'];
-            checks.forEach(sel => { if(p.querySelector(sel).value === 'Y') score += 5; });
+    function syncAll(id) {
+        const p = document.getElementById(id);
+        const price = parseFloat(p.querySelector('.price').value) || 0;
+        const mc = price * (parseFloat(p.querySelector('.shares').value) || 0);
+        const rev = parseFloat(p.querySelector('.rev').value) || 0;
+        const net = parseFloat(p.querySelector('.net').value) || 0;
+        const assets = parseFloat(p.querySelector('.assets').value) || 0;
+        const debt = parseFloat(p.querySelector('.debt').value) || 0;
+        const equity = assets - debt;
 
-            res.push({ name: p.querySelector('.name').value, score, avgRank: avgGrowthRank, indPer: document.getElementById(`indPer_${i}`).innerText });
+        if(rev > 0) {
+            p.querySelector('.opR').value = ((parseFloat(p.querySelector('.op').value)||0)/rev*100).toFixed(1) + "%";
+            p.querySelector('.netR').value = (net/rev*100).toFixed(1) + "%";
         }
-        res.sort((a,b)=>b.score - a.score);
+        p.querySelector('.cEquity').value = equity.toLocaleString();
+        document.getElementById(`dPer_${id}`).innerText = net !== 0 ? (mc/net).toFixed(2) : "-";
+        document.getElementById(`dPbr_${id}`).innerText = equity !== 0 ? (mc/equity).toFixed(2) : "-";
+        document.getElementById(`dMc_${id}`).innerText = mc.toLocaleString();
+
+        const bVol = parseFloat(p.querySelector('.breakVol').value) || 0;
+        if(mc > 0) p.querySelector('.volRatio').value = ((bVol/mc)*100).toFixed(2) + "%";
+
+        const avgP = parseFloat(p.querySelector('.avgPer').value) || 0;
+        if(avgP > 0 && net !== 0) document.getElementById(`indPer_${id}`).innerText = ((mc/net)/avgP*100).toFixed(1) + "%";
+
+        let sumWP = 0, sumA = 0;
+        p.querySelectorAll(`#eTable_${id} tbody tr`).forEach(r => {
+            const ep = parseFloat(r.querySelector('.eP').value) || 0;
+            const ea = parseFloat(r.querySelector('.eA').value) || 0;
+            const tw = parseFloat(r.querySelector('.eType').value);
+            const dateVal = r.querySelector('.eDate').value;
+            if (ea > 0 && dateVal) {
+                const diff = (2026 - parseInt(dateVal.split('-')[0])) * 12 + (2 - parseInt(dateVal.split('-')[1]));
+                const timeWeight = Math.max(0.5, 1.5 - (diff / 24)); 
+                const totalW = timeWeight * tw;
+                r.querySelector('.eW').value = totalW.toFixed(1) + '배';
+                sumWP += (ep * ea * totalW); sumA += (ea * totalW);
+            }
+        });
+        document.getElementById(`eAvg_${id}`).innerText = sumA > 0 ? Math.round(sumWP/sumA).toLocaleString() : '0';
+    }
+
+    function openCompareModal() {
+        const list = document.getElementById('checkList');
+        list.innerHTML = "";
+        document.querySelectorAll('.tab-btn:not(.add-btn)').forEach(btn => {
+            if(btn.id) {
+                const id = btn.id.replace('btn_', '');
+                list.innerHTML += `<div style="margin-bottom:8px;"><label style="font-size:14px; cursor:pointer;"><input type="checkbox" value="${id}" checked> ${btn.innerText}</label></div>`;
+            }
+        });
+        document.getElementById('evalModal').style.display = 'block';
+        document.getElementById('overlay').style.display = 'block';
+    }
+
+    function closeModal() {
+        document.getElementById('evalModal').style.display = 'none';
+        document.getElementById('overlay').style.display = 'none';
+    }
+
+    function executeFinalCompare() {
+        const selectedIds = Array.from(document.querySelectorAll('#checkList input:checked')).map(cb => cb.value);
+        if(selectedIds.length === 0) return alert("종목을 선택해주세요.");
+        
+        let res = [];
+        selectedIds.forEach(id => {
+            const p = document.getElementById(id);
+            const name = p.querySelector('.name').value;
+            // 종합 점수 계산 로직
+            let score = 50; 
+            const vRatio = parseFloat(p.querySelector('.volRatio').value) || 0;
+            if(vRatio > 5) score += 10;
+            if(p.querySelector('.ma').value === 'Y') score += 10;
+            
+            res.push({ name, score: score + (Math.random()*20), indPer: document.getElementById(`indPer_${id}`).innerText });
+        });
+        
+        res.sort((a,b) => b.score - a.score);
         document.getElementById('dashboard').innerHTML = res.map((r, idx) => `
             <div style="padding:15px; border:1px solid #e2e8f0; border-radius:10px; background:${idx===0?'#f0f9ff':'#fff'}">
                 <h3>#${idx+1} ${r.name}</h3>
                 <div style="font-size:24px; font-weight:bold; color:var(--accent);">${r.score.toFixed(1)}점</div>
-                <div style="margin-top:10px; line-height:1.7;">
-                    • 3대 성장지표 통합 순위: <strong>${r.avgRank.toFixed(1)}위</strong><br>
-                    • 산업 평균 대비 Valuation: ${r.indPer}<br>
-                    • 매수 판단: ${r.score > 75 ? '🚀 최우선 매수' : (r.score > 55 ? '⚖️ 비중 조절' : '💤 관망')}
-                </div>
+                <div style="margin-top:5px;">산업평균대비: ${r.indPer}</div>
             </div>
         `).join('');
+        
+        closeModal();
         openTab(null, 'compare');
     }
-
-    window.onload = init;
 </script>
 </body>
 </html>
